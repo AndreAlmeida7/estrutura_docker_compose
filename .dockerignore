@@ -1,16 +1,4 @@
 .git
-.gitignore
-.venv
-.vscode
-.idea
-**/__pycache__
-**/*.pyc
 **/node_modules
+**/__pycache__
 frontend/build
-frontend/coverage
-frontend/cypress
-db
-*.sqlite3
-.env
-docker-compose*.y*ml
-README.md

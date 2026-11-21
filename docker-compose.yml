@@ -1,9 +1,5 @@
 name: guess-game
 
-# Versões e credenciais vêm de variáveis (.env opcional; modelo em .env.example).
-# Sem .env, valem os defaults abaixo.
-# Atualizar um componente = trocar a versão no .env e rodar "docker compose up -d".
-
 services:
   db:
     image: postgres:${POSTGRES_VERSION:-16-alpine}
@@ -13,52 +9,40 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secretpass}
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
     volumes:
-      - pgdata:/var/lib/postgresql/data              # dados persistentes
-      - ./postgres/init:/docker-entrypoint-initdb.d:ro  # schema inicial (só em volume vazio)
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
-      - backend-net
+      - backend
     healthcheck:
-      # -h 127.0.0.1 (TCP): o servidor temporário do init só escuta via socket,
-      # então o db só fica "healthy" depois que o init terminou de verdade
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      # via TCP, para só ficar pronto depois que o script de init terminar
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER}"]
       interval: 5s
-      timeout: 3s
       retries: 10
-      start_period: 10s
 
   backend:
     image: guess-backend:${BACKEND_VERSION:-1.0.0}
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: .
     restart: unless-stopped
     environment:
-      FLASK_APP: run.py
       FLASK_DB_TYPE: postgres
       FLASK_DB_HOST: db
-      FLASK_DB_PORT: 5432
       FLASK_DB_USER: ${POSTGRES_USER:-postgres}
       FLASK_DB_PASSWORD: ${POSTGRES_PASSWORD:-secretpass}
       FLASK_DB_NAME: ${POSTGRES_DB:-postgres}
     deploy:
-      replicas: ${BACKEND_REPLICAS:-3}
+      replicas: 3
     depends_on:
       db:
         condition: service_healthy
-        restart: true   # reinicia o backend quando o db é reiniciado via compose
+        restart: true
     networks:
-      - backend-net
-    # sem "ports": o backend só é acessível via NGINX
+      - backend
 
   nginx:
     image: guess-frontend:${FRONTEND_VERSION:-1.0.0}
     build:
       context: .
       dockerfile: frontend/Dockerfile
-      args:
-        NODE_VERSION: ${NODE_VERSION:-18.17.0}
-        NGINX_VERSION: ${NGINX_VERSION:-1.28-alpine}
-        REACT_APP_BACKEND_URL: /api
     restart: unless-stopped
     ports:
       - "${HTTP_PORT:-8080}:80"
@@ -66,13 +50,13 @@ services:
       backend:
         condition: service_healthy
     networks:
-      - frontend-net
-      - backend-net
+      - frontend
+      - backend
 
 volumes:
   pgdata:
 
 networks:
-  frontend-net:
-  backend-net:
-    internal: true   # db e backend sem acesso externo
+  frontend:
+  backend:
+    internal: true
